@@ -27,7 +27,7 @@ mqtt.on('connect', function () {
   log.info('mqtt subscribe', config.name + '/set/#');
   mqtt.subscribe(config.name + '/set/#');
 
-  setInterval(checkStates, 30000);
+  setInterval(checkStates, 5000);
 });
 
 mqtt.on('close', function () {
