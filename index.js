@@ -6,6 +6,7 @@ var config = require('./config.js');
 var Mqtt = require('mqtt');
 var harmony = require('harmonyhubjs-client');
 var HarmonyHubDiscover = require('harmonyhubjs-discover');
+var mqttWildcard = require('mqtt-wildcard');
 
 var mqttConnected;
 var hubs = {};
@@ -26,7 +27,7 @@ mqtt.on('connect', function () {
   log.info('mqtt subscribe', config.name + '/set/#');
   mqtt.subscribe(config.name + '/set/#');
 
-  setInterval(checkState, 1000);
+  setInterval(checkStates, 30000);
 });
 
 mqtt.on('close', function () {
@@ -40,10 +41,22 @@ mqtt.on('error', function (err) {
   log.error('mqtt', err);
 });
 
-mqtt.on('message', function (topic, payload) {
-  payload = payload.toString();
-  log.debug('mqtt <', topic, payload);
-// TODO do something with incoming messages
+mqtt.on('message', (topic, message) => {
+  var hub = mqttWildcard(topic, config.name + '/set/+/activity');
+  if (hub && hub.length === 1) {
+    let h = hub[0];
+    let value = message.toString();
+    log.info('set activity', h, value);
+    if (hubs.hasOwnProperty(h)) {
+      var harmonyClient = hubs[h].harmonyClient;
+      var id = hubs[h].activities_reverse[value];
+      if (id) {
+        harmonyClient.startActivity(id).then(function (a) {
+          checkState(h, harmonyClient);
+        });
+      }
+    }
+  }
 });
 
 var discover = new HarmonyHubDiscover(61991);
@@ -63,6 +76,7 @@ discover.on('offline', function (hub) {
 
 function connect (hub) {
   log.info('Connect: ' + hub.host_name + ' at ' + hub.ip);
+  mqtt.publish(config.name + '/connected', '2', { retain: true });
   var hubName = hub.host_name.replace(/[.\s]+/g, '_');
   if (!hubs[hubName]) {
     hubs[hubName] = hub;
@@ -70,13 +84,14 @@ function connect (hub) {
       log.info('Connected: ' + hubName);
       harmonyClient.getAvailableCommands()
         .then(function (config) {
-          // console.log(config)
+          // log.debug(config)
+          log.debug('commands', hubName);
           hubs[hubName].activities = {};
           hubs[hubName].activities_reverse = {};
           hubs[hubName].devices = {};
           hubs[hubName].devices_reverse = {};
           processConfig(hubs, hubName, config);
-          // console.log('###',hubs[hubName])
+          // log.debug('###', hubs[hubName])
           hubs[hubName].harmonyClient = harmonyClient;
         });
     });
@@ -86,6 +101,7 @@ function connect (hub) {
 function processConfig (hubs, hub, config) {
   config.activity.forEach(function (activity) {
     var activityLabel = activity.label.replace(/[.\s]+/g, '_');
+    log.info('activites', hub, activity.id, activityLabel);
     hubs[hub].activities[activity.id] = activityLabel;
     hubs[hub].activities_reverse[activityLabel] = activity.id;
   });
@@ -93,7 +109,7 @@ function processConfig (hubs, hub, config) {
   /* create devices */
   config.device.forEach(function (device) {
     var deviceLabel = device.label.replace(/[.\s]+/g, '_');
-    var controlGroup = device.controlGroup;
+    log.info('devices', hub, device.id, deviceLabel);
     hubs[hub].devices[device.id] = deviceLabel;
     hubs[hub].devices_reverse[deviceLabel] = device.id;
   });
@@ -102,17 +118,29 @@ function processConfig (hubs, hub, config) {
 // Look for hubs:
 discover.start();
 
-function checkState () {
+function checkStates () {
   for (var hub in hubs) {
-    //console.log('Check ' + hub);
+    log.debug('Check ' + hub);
     if (hubs.hasOwnProperty(hub)) {
       var harmonyClient = hubs[hub].harmonyClient;
       if (harmonyClient) {
-        harmonyClient.getCurrentActivity()
-        .then(function (a) {
-            log.info(hub,hubs[hub].activities[a]);
-        });
+        checkState(hub, harmonyClient);
       }
     }
   }
+}
+
+function checkState (hub, harmonyClient) {
+  harmonyClient.getCurrentActivity()
+    .then(function (a) {
+      log.debug(hub, hubs[hub].activities[a]);
+      var topic = config.name + '/status/' + hub + '/activity';
+      var state = {
+        ts: Math.floor(new Date() / 1000),
+        val: hubs[hub].activities[a]
+      };
+      mqtt.publish(topic, JSON.stringify(state), { retain: true }, function () {
+        log.debug(topic, state);
+      });
+    });
 }

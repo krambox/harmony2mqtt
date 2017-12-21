@@ -1,5 +1,6 @@
 var pkg = require('./package.json');
 var config = require('yargs')
+  .env('HARMONY')
   .usage(pkg.name + ' ' + pkg.version + '\n' + pkg.description + '\n\nUsage: $0 [options]')
   .describe('v', 'possible values: "error", "warn", "info", "debug"')
   .describe('n', 'instance name. used as mqtt client id and as prefix for connected topic')
@@ -13,10 +14,9 @@ var config = require('yargs')
   })
   .default({
     'u': 'mqtt://kiste.local',
-    'n': 'harmony', // TODO Replace Name here!
+    'n': 'harmony',
     'v': 'info'
   })
-  // .config('config')
   .version()
   .help('help')
   .argv;
