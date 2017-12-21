@@ -31,6 +31,7 @@ WORKDIR /root/app
 # copy production node_modules
 COPY --from=dependencies /root/app/prod_node_modules ./node_modules
 # copy app sources
+COPY package.json .
 COPY config.js .
 COPY index.js .
 CMD ./index.js 
