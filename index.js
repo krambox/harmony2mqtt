@@ -65,7 +65,9 @@ discover.on('online', function (hub) {
   // Triggered when a new hub was found
   if (hub) {
     log.info('discovered ' + hub.ip);
-    connect(hub);
+    if (hub.ip) {
+      connect(hub);
+    }
   }
 });
 
