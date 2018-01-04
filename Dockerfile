@@ -3,8 +3,7 @@
 #
 # ---- Dependencies ----
 FROM mhart/alpine-node:8 AS dependencies
-RUN apk add --no-cache python build-base 
-RUN apk add git
+RUN apk add --no-cache python build-base git
 
 WORKDIR /root/app
 COPY package.json .
